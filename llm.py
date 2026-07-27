@@ -119,11 +119,31 @@ colocar cada trecho. Se o material bruto nao tiver conteudo suficiente pra \
 preencher um campo, deixe vazio ao inves de inventar."""
 
 
-def structure_content(model_key: str, paragraphs: list[str], images: list) -> list[dict]:
-    """images: lista de Path das imagens extraidas do material bruto (na ordem
-    em que apareceram). Retorna lista de dicts com as chaves ja resolvidas
-    pros nomes de campo esperados por config.TEMPLATES[model_key]['fields'/'image_roles']
-    (ex: 'imagem_indice' vira 'imagem': Path)."""
+# Tamanho maximo (em caracteres) de material bruto por chamada a OpenAI. Um
+# lote grande demais faz a resposta JSON estourar o limite de tokens de saida
+# do modelo e vir cortada no meio (json.loads quebra com "Unterminated string").
+# Mantendo lotes modestos, cada chamada fica bem dentro do limite mesmo com a
+# saida sendo quase do mesmo tamanho da entrada (texto copiado verbatim).
+MAX_BATCH_CHARS = 6000
+
+
+def _batch_paragraphs(paragraphs: list[str], max_chars: int = MAX_BATCH_CHARS) -> list[list[str]]:
+    batches = []
+    current: list[str] = []
+    current_len = 0
+    for para in paragraphs:
+        if current and current_len + len(para) > max_chars:
+            batches.append(current)
+            current = []
+            current_len = 0
+        current.append(para)
+        current_len += len(para)
+    if current:
+        batches.append(current)
+    return batches
+
+
+def _structure_batch(model_key: str, paragraphs: list[str], images: list) -> list[dict]:
     client = _get_client()
     schema_cfg = SCHEMAS[model_key]
 
@@ -154,7 +174,14 @@ def structure_content(model_key: str, paragraphs: list[str], images: list) -> li
         },
     )
 
-    data = json.loads(response.choices[0].message.content)
+    choice = response.choices[0]
+    if choice.finish_reason == "length":
+        raise RuntimeError(
+            "resposta da OpenAI cortada por limite de tokens mesmo apos dividir em lotes -- "
+            "reduza MAX_BATCH_CHARS em llm.py"
+        )
+
+    data = json.loads(choice.message.content)
 
     resolved_items = []
     for item in data["items"]:
@@ -168,3 +195,18 @@ def structure_content(model_key: str, paragraphs: list[str], images: list) -> li
         resolved_items.append(resolved)
 
     return resolved_items
+
+
+def structure_content(model_key: str, paragraphs: list[str], images: list) -> list[dict]:
+    """images: lista de Path das imagens extraidas do material bruto (na ordem
+    em que apareceram). Retorna lista de dicts com as chaves ja resolvidas
+    pros nomes de campo esperados por config.TEMPLATES[model_key]['fields'/'image_roles']
+    (ex: 'imagem_indice' vira 'imagem': Path).
+
+    Material grande e dividido em varios lotes (cada um uma chamada separada a
+    OpenAI) pra nunca estourar o limite de tokens de saida de uma unica
+    resposta -- essencial pro caso de uso real (lotes de 200 a 500 slides)."""
+    all_items = []
+    for batch in _batch_paragraphs(paragraphs):
+        all_items.extend(_structure_batch(model_key, batch, images))
+    return all_items
