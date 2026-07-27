@@ -16,7 +16,10 @@ def _get_client():
     if _client is None:
         if not OPENAI_API_KEY:
             raise RuntimeError("OPENAI_API_KEY nao configurada -- veja .env.example")
-        _client = OpenAI(api_key=OPENAI_API_KEY)
+        # timeout curto por chamada -- sem isso, uma chamada travada podia
+        # ficar pendurada pelo timeout default do SDK (bem mais longo) sem
+        # nenhum sinal de erro nem progresso pro usuario
+        _client = OpenAI(api_key=OPENAI_API_KEY, timeout=60.0, max_retries=2)
     return _client
 
 
@@ -197,7 +200,7 @@ def _structure_batch(model_key: str, paragraphs: list[str], images: list) -> lis
     return resolved_items
 
 
-def structure_content(model_key: str, paragraphs: list[str], images: list) -> list[dict]:
+def structure_content(model_key: str, paragraphs: list[str], images: list, on_progress=None) -> list[dict]:
     """images: lista de Path das imagens extraidas do material bruto (na ordem
     em que apareceram). Retorna lista de dicts com as chaves ja resolvidas
     pros nomes de campo esperados por config.TEMPLATES[model_key]['fields'/'image_roles']
@@ -205,8 +208,14 @@ def structure_content(model_key: str, paragraphs: list[str], images: list) -> li
 
     Material grande e dividido em varios lotes (cada um uma chamada separada a
     OpenAI) pra nunca estourar o limite de tokens de saida de uma unica
-    resposta -- essencial pro caso de uso real (lotes de 200 a 500 slides)."""
+    resposta -- essencial pro caso de uso real (lotes de 200 a 500 slides).
+    on_progress(lote_atual, total_lotes), se informado, e chamado antes de cada
+    chamada -- usado pra reportar status real ao usuario, nao so uma mensagem
+    parada durante o tempo todo."""
+    batches = _batch_paragraphs(paragraphs)
     all_items = []
-    for batch in _batch_paragraphs(paragraphs):
+    for i, batch in enumerate(batches, start=1):
+        if on_progress:
+            on_progress(i, len(batches))
         all_items.extend(_structure_batch(model_key, batch, images))
     return all_items

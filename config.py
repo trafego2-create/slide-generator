@@ -15,7 +15,7 @@ TEMPLATES = {
         "label": "Apresentação padrão",
         "file": BASE_DIR / "pptx_templates" / "PETR_modelo.pptx",
         "keeper_indices": [0, 1],  # capa + abertura, preservados como estao
-        "content_template_index": 4,  # slide 'texto + imagem', fonte do clone
+        "content_template_index": 2,  # slide 'texto + imagem', fonte do clone (apos poda em scripts/prune_templates.py)
         "roles": {"corpo": "Rectangle 3", "imagem": "Picture 2"},
         "text_role_for_capacity": "corpo",
         "fields": ["corpo"],  # campos de texto que o LLM deve preencher por item
@@ -26,7 +26,7 @@ TEMPLATES = {
         "label": "Mestre em Questões",
         "file": BASE_DIR / "pptx_templates" / "BB_modelo.pptx",
         "keeper_indices": [0, 1],
-        "content_template_index": 3,  # slide 'questao/comentario', 1 bloco de texto, sem imagem
+        "content_template_index": 2,  # slide 'questao/comentario', 1 bloco de texto, sem imagem (apos poda)
         "roles": {"corpo": "Retângulo 1"},
         "text_role_for_capacity": "corpo",
         "fields": ["corpo"],
@@ -37,7 +37,7 @@ TEMPLATES = {
         "label": "Atualidades",
         "file": BASE_DIR / "pptx_templates" / "Atualidades_modelo.pptx",
         "keeper_indices": [0, 1],
-        "content_template_index": 3,  # slide 'noticia padrao' (manchete+resumo+2 imagens, sem categoria)
+        "content_template_index": 2,  # slide 'noticia padrao' (manchete+resumo+2 imagens, sem categoria) (apos poda)
         "roles": {
             "manchete": "Retângulo 4",
             "resumo": "Retângulo 5",
