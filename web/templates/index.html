@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <title>Gerador de Slides — Aprova Sim</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>Gerador de Slides</h1>
+    <p class="subtitle">Envie o material do professor e escolha o modelo — o resto é automático.</p>
+
+    <form
+      id="upload-form"
+      hx-post="/upload"
+      hx-target="#resultado"
+      hx-swap="innerHTML"
+      hx-encoding="multipart/form-data"
+    >
+      <label class="field">
+        <span>Material do professor (.docx ou .pdf)</span>
+        <input type="file" name="arquivo" accept=".docx,.pdf" required />
+      </label>
+
+      <fieldset class="field">
+        <legend>Modelo</legend>
+        {% for key, label in modelos %}
+        <label class="radio">
+          <input type="radio" name="modelo" value="{{ key }}" {% if loop.first %}checked{% endif %} />
+          {{ label }}
+        </label>
+        {% endfor %}
+      </fieldset>
+
+      <button type="submit">Gerar apresentação</button>
+    </form>
+
+    <div id="resultado"></div>
+  </main>
+</body>
+</html>

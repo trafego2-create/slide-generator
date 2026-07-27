@@ -1,0 +1,17 @@
+<div
+  id="status-box"
+  {% if job.status not in ['concluido', 'erro'] %}
+  hx-get="/jobs/{{ job.id }}"
+  hx-trigger="every 2s"
+  hx-swap="outerHTML"
+  {% endif %}
+>
+  {% if job.status == 'concluido' %}
+    <p class="status ok">Pronto.</p>
+    <a class="button" href="/jobs/{{ job.id }}/download">Baixar apresentação</a>
+  {% elif job.status == 'erro' %}
+    <p class="status erro">Erro: {{ job.erro }}</p>
+  {% else %}
+    <p class="status andamento">{{ job.status }}…</p>
+  {% endif %}
+</div>
