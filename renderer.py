@@ -10,16 +10,15 @@ from pptx.oxml.ns import qn
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from slide_clone import duplicate_slide, find_shape_by_name, set_text_preserving_format, replace_picture  # noqa: E402
-from text_fit import split_text_to_slides, max_lines_for_box  # noqa: E402
+from text_fit import split_text_to_slides, estimate_char_budget  # noqa: E402
 
 from config import TEMPLATES, OUTPUT_DIR
 
 
-def expand_items_by_capacity(cfg, items):
-    """Para o campo marcado como 'text_role_for_capacity', divide o item em
-    varios (um por slide) quando o texto nao cabe no padrao. Os demais campos
-    do item sao repetidos em todos os slides gerados a partir dele (ex: a
-    mesma foto acompanha todos os pedacos de uma noticia longa)."""
+def _get_capacity_params(cfg):
+    """(font_name, font_size_pt, box_width_emu, box_height_emu) do shape que
+    define a capacidade de texto do modelo -- usado tanto pra dividir itens
+    grandes demais quanto pra estimar o orcamento de caracteres por item."""
     role = cfg["text_role_for_capacity"]
     shape_name = cfg["roles"][role]
 
@@ -30,7 +29,25 @@ def expand_items_by_capacity(cfg, items):
     font_name = run.font.name or "Arial"
     # quando 'sz' nao aparece em run/paragrafo/lstStyle, o padrao implicito da spec OOXML e 18pt
     font_size_pt = run.font.size.pt if run.font.size else 18.0
-    box_w, box_h = template_shape.width, template_shape.height
+    return font_name, font_size_pt, template_shape.width, template_shape.height
+
+
+def get_capacity_budget(model_key: str) -> int:
+    """Estimativa de quantos caracteres cabem no campo principal de texto do
+    modelo -- usado so como orientacao pro LLM agrupar conteudo num tamanho
+    de item razoavel, evitando um item minusculo por frase."""
+    cfg = TEMPLATES[model_key]
+    font_name, font_size_pt, box_w, box_h = _get_capacity_params(cfg)
+    return estimate_char_budget(font_name, font_size_pt, box_w, box_h)
+
+
+def expand_items_by_capacity(cfg, items):
+    """Para o campo marcado como 'text_role_for_capacity', divide o item em
+    varios (um por slide) quando o texto nao cabe no padrao. Os demais campos
+    do item sao repetidos em todos os slides gerados a partir dele (ex: a
+    mesma foto acompanha todos os pedacos de uma noticia longa)."""
+    role = cfg["text_role_for_capacity"]
+    font_name, font_size_pt, box_w, box_h = _get_capacity_params(cfg)
 
     expanded = []
     for item in items:

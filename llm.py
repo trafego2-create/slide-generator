@@ -95,22 +95,30 @@ MODEL_INSTRUCTIONS = {
     "bb": (
         "O material e um banco de questoes comentadas. Cada unidade de "
         "conteudo (um enunciado com alternativas, OU um comentario de "
-        "resposta) vira um item separado no campo 'corpo'. Um comentario "
+        "resposta) vira UM item so no campo 'corpo' -- nao quebre uma "
+        "questao ou comentario em varios itens menores. Um comentario "
         "normalmente comeca com 'Comentario:' no proprio texto original -- "
         "mantenha isso se ja estiver assim, nao adicione se nao estiver."
     ),
     "petr": (
-        "O material e uma aula expositiva. Cada bloco de conteudo com um "
-        "tema proprio vira um item, com 'corpo' sendo o texto e "
-        "'imagem_indice' apontando pra imagem de apoio mais relacionada "
-        "(ou null se nenhuma imagem se aplica)."
+        "O material e uma aula expositiva. Agrupe paragrafos relacionados "
+        "num MESMO item ate aproximar de {budget} caracteres no campo "
+        "'corpo' -- so abra um item novo quando o assunto mudar claramente "
+        "ou esse tamanho for ultrapassado. NUNCA crie um item separado pra "
+        "cada frase ou paragrafo curto isolado -- isso gera excesso de "
+        "slides minusculos, o que e o erro mais comum aqui. "
+        "'imagem_indice' aponta pra imagem de apoio mais relacionada ao "
+        "item (ou null se nenhuma imagem se aplica)."
     ),
     "atualidades": (
-        "O material e um resumo de noticias. Cada noticia vira um item: "
-        "'manchete' e o titulo curto em caixa alta, 'resumo' sao os pontos "
-        "principais em frases curtas (cada frase um paragrafo, viram "
-        "bullets), e os indices de imagem apontam pras fotos relacionadas "
-        "aquela noticia especifica (ou null)."
+        "O material e um resumo de noticias. Cada noticia distinta vira um "
+        "item: 'manchete' e o titulo curto em caixa alta, 'resumo' sao os "
+        "pontos principais DA MESMA noticia em frases curtas (cada frase "
+        "um paragrafo, vira um bullet) -- agrupe todos os pontos de uma "
+        "mesma noticia num so item, ate aproximar de {budget} caracteres "
+        "no campo 'resumo'. NUNCA crie um item por frase isolada; um item "
+        "e uma noticia inteira. Os indices de imagem apontam pras fotos "
+        "relacionadas aquela noticia especifica (ou null)."
     ),
 }
 
@@ -146,7 +154,7 @@ def _batch_paragraphs(paragraphs: list[str], max_chars: int = MAX_BATCH_CHARS) -
     return batches
 
 
-def _structure_batch(model_key: str, paragraphs: list[str], images: list) -> list[dict]:
+def _structure_batch(model_key: str, paragraphs: list[str], images: list, char_budget: int | None = None) -> list[dict]:
     client = _get_client()
     schema_cfg = SCHEMAS[model_key]
 
@@ -159,7 +167,9 @@ def _structure_batch(model_key: str, paragraphs: list[str], images: list) -> lis
             f"de 0 a {len(images) - 1}; nunca invente um indice fora desse intervalo):\n{listing}"
         )
 
-    user_prompt = f"{MODEL_INSTRUCTIONS[model_key]}\n\nMaterial bruto do professor:\n\n{raw_text}{image_hint}"
+    instructions = MODEL_INSTRUCTIONS[model_key].format(budget=char_budget or 900)
+
+    user_prompt = f"{instructions}\n\nMaterial bruto do professor:\n\n{raw_text}{image_hint}"
 
     response = client.chat.completions.create(
         model=OPENAI_MODEL,
@@ -200,7 +210,13 @@ def _structure_batch(model_key: str, paragraphs: list[str], images: list) -> lis
     return resolved_items
 
 
-def structure_content(model_key: str, paragraphs: list[str], images: list, on_progress=None) -> list[dict]:
+def structure_content(
+    model_key: str,
+    paragraphs: list[str],
+    images: list,
+    char_budget: int | None = None,
+    on_progress=None,
+) -> list[dict]:
     """images: lista de Path das imagens extraidas do material bruto (na ordem
     em que apareceram). Retorna lista de dicts com as chaves ja resolvidas
     pros nomes de campo esperados por config.TEMPLATES[model_key]['fields'/'image_roles']
@@ -209,13 +225,16 @@ def structure_content(model_key: str, paragraphs: list[str], images: list, on_pr
     Material grande e dividido em varios lotes (cada um uma chamada separada a
     OpenAI) pra nunca estourar o limite de tokens de saida de uma unica
     resposta -- essencial pro caso de uso real (lotes de 200 a 500 slides).
-    on_progress(lote_atual, total_lotes), se informado, e chamado antes de cada
-    chamada -- usado pra reportar status real ao usuario, nao so uma mensagem
-    parada durante o tempo todo."""
+    char_budget (de renderer.get_capacity_budget) orienta a IA a agrupar
+    conteudo ate o tamanho real de um slide, em vez de criar um item minusculo
+    por frase -- sem isso, um material de 125 paginas pode virar milhares de
+    itens fragmentados. on_progress(lote_atual, total_lotes), se informado, e
+    chamado antes de cada chamada -- usado pra reportar status real ao
+    usuario, nao so uma mensagem parada durante o tempo todo."""
     batches = _batch_paragraphs(paragraphs)
     all_items = []
     for i, batch in enumerate(batches, start=1):
         if on_progress:
             on_progress(i, len(batches))
-        all_items.extend(_structure_batch(model_key, batch, images))
+        all_items.extend(_structure_batch(model_key, batch, images, char_budget))
     return all_items

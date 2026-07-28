@@ -49,8 +49,15 @@ def process_job(job_id: str, upload_path: Path):
         images_dir = UPLOAD_DIR / job_id / "images"
         paragraphs, images = doc_parser.extract(upload_path, images_dir)
 
+        char_budget = renderer.get_capacity_budget(model_key)
+
+        def report_progress(batch_num, total_batches):
+            job["status"] = f"estruturando conteudo (IA) -- lote {batch_num} de {total_batches}"
+
         job["status"] = "estruturando conteudo (IA)"
-        items = llm.structure_content(model_key, paragraphs, images)
+        items = llm.structure_content(
+            model_key, paragraphs, images, char_budget=char_budget, on_progress=report_progress
+        )
 
         job["status"] = "gerando pptx"
         out_path = renderer.build_presentation(model_key, items, job_id=job_id)
