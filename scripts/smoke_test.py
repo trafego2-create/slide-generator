@@ -9,8 +9,6 @@ from pptx import Presentation
 from renderer import build_presentation
 from config import TEMPLATES
 
-FAKE_PHOTO = r"C:\Users\trafe\Downloads\image.png"
-
 LONG_TEXT = "\n".join([
     "Gestao de Continuidade de Negocios (GCN) e o conjunto de praticas de gestao que visa identificar potenciais ameacas a organizacao e os impactos que essas ameacas, caso se concretizem, podem causar as operacoes de negocio.",
     "O objetivo central da GCN e fornecer uma estrutura para aumentar a resiliencia organizacional, com a capacidade de uma resposta eficaz que salvaguarde os interesses das partes interessadas, a reputacao, a marca e as atividades de criacao de valor da organizacao.",
@@ -22,8 +20,8 @@ LONG_TEXT = "\n".join([
 
 SCENARIOS = {
     "petr": [
-        {"corpo": LONG_TEXT, "imagem": FAKE_PHOTO},
-        {"corpo": "Um segundo item, mais curto, so pra confirmar que nao sofre split desnecessario.", "imagem": FAKE_PHOTO},
+        {"corpo": LONG_TEXT},
+        {"corpo": "Um segundo item, mais curto, so pra confirmar que nao sofre split desnecessario."},
     ],
     "bb": [
         {"corpo": "Enunciado: qual das alternativas abaixo esta correta? A) primeira B) segunda C) terceira"},
@@ -33,8 +31,6 @@ SCENARIOS = {
         {
             "manchete": "GOVERNO ANUNCIA NOVA MEDIDA ECONOMICA",
             "resumo": LONG_TEXT,
-            "imagem_1": FAKE_PHOTO,
-            "imagem_2": FAKE_PHOTO,
         },
     ],
 }

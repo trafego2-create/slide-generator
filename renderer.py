@@ -9,7 +9,7 @@ from pptx import Presentation
 from pptx.oxml.ns import qn
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
-from slide_clone import duplicate_slide, find_shape_by_name, set_text_preserving_format, replace_picture  # noqa: E402
+from slide_clone import duplicate_slide, find_shape_by_name, set_text_preserving_format  # noqa: E402
 from text_fit import split_text_to_slides, estimate_char_budget  # noqa: E402
 
 from config import TEMPLATES, OUTPUT_DIR
@@ -79,8 +79,7 @@ def _remove_non_keeper_originals(prs, original_count, keeper_indices):
 
 
 def build_presentation(model_key: str, items: list[dict], job_id: str | None = None) -> Path:
-    """items: lista de dicts com os campos de texto (cfg['fields']) e,
-    quando aplicavel, os caminhos de imagem por papel (cfg['image_roles'])."""
+    """items: lista de dicts com os campos de texto (cfg['fields'])."""
     cfg = TEMPLATES[model_key]
 
     expanded_items = expand_items_by_capacity(cfg, items)
@@ -95,11 +94,11 @@ def build_presentation(model_key: str, items: list[dict], job_id: str | None = N
             shape = find_shape_by_name(new_slide, cfg["roles"][field])
             set_text_preserving_format(shape, item.get(field, "") or "")
 
+        # sem imagens por decisao de escopo atual -- remove o quadro de foto
+        # em vez de deixar a foto de exemplo original do modelo aparecendo
         for image_role in cfg["image_roles"]:
-            image_path = item.get(image_role)
-            if image_path:
-                shape = find_shape_by_name(new_slide, cfg["roles"][image_role])
-                replace_picture(shape, str(image_path))
+            shape = find_shape_by_name(new_slide, cfg["roles"][image_role])
+            shape._element.getparent().remove(shape._element)
 
     _remove_non_keeper_originals(prs, original_count, cfg["keeper_indices"])
 

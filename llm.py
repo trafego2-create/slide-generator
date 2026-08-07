@@ -52,11 +52,8 @@ SCHEMAS = {
                     "type": "array",
                     "items": {
                         "type": "object",
-                        "properties": {
-                            "corpo": {"type": "string"},
-                            "imagem_indice": {"type": ["integer", "null"]},
-                        },
-                        "required": ["corpo", "imagem_indice"],
+                        "properties": {"corpo": {"type": "string"}},
+                        "required": ["corpo"],
                         "additionalProperties": False,
                     },
                 },
@@ -77,10 +74,8 @@ SCHEMAS = {
                         "properties": {
                             "manchete": {"type": "string"},
                             "resumo": {"type": "string"},
-                            "imagem_1_indice": {"type": ["integer", "null"]},
-                            "imagem_2_indice": {"type": ["integer", "null"]},
                         },
-                        "required": ["manchete", "resumo", "imagem_1_indice", "imagem_2_indice"],
+                        "required": ["manchete", "resumo"],
                         "additionalProperties": False,
                     },
                 },
@@ -93,12 +88,17 @@ SCHEMAS = {
 
 MODEL_INSTRUCTIONS = {
     "bb": (
-        "O material e um banco de questoes comentadas. Cada unidade de "
-        "conteudo (um enunciado com alternativas, OU um comentario de "
-        "resposta) vira UM item so no campo 'corpo' -- nao quebre uma "
-        "questao ou comentario em varios itens menores. Um comentario "
-        "normalmente comeca com 'Comentario:' no proprio texto original -- "
-        "mantenha isso se ja estiver assim, nao adicione se nao estiver."
+        "O material e um banco de questoes comentadas. Os limites de cada "
+        "unidade de conteudo ja estao marcados no proprio texto original "
+        "(numeracao de questao, alternativas A a E, a palavra 'Comentario:' "
+        "iniciando um comentario) -- identifique esses limites e crie UM "
+        "item por unidade (um enunciado com alternativas, OU um comentario). "
+        "Regra critica: NUNCA junte duas questoes ou comentarios diferentes "
+        "no mesmo item, mesmo que juntos fiquem curtos -- cada questao e "
+        "cada comentario, por menor que seja, e sempre o seu proprio item, "
+        "nunca dividido nem fundido com outro. Um comentario normalmente "
+        "comeca com 'Comentario:' no proprio texto original -- mantenha "
+        "isso se ja estiver assim, nao adicione se nao estiver."
     ),
     "petr": (
         "O material e uma aula expositiva. Agrupe paragrafos relacionados "
@@ -106,9 +106,7 @@ MODEL_INSTRUCTIONS = {
         "'corpo' -- so abra um item novo quando o assunto mudar claramente "
         "ou esse tamanho for ultrapassado. NUNCA crie um item separado pra "
         "cada frase ou paragrafo curto isolado -- isso gera excesso de "
-        "slides minusculos, o que e o erro mais comum aqui. "
-        "'imagem_indice' aponta pra imagem de apoio mais relacionada ao "
-        "item (ou null se nenhuma imagem se aplica)."
+        "slides minusculos, o que e o erro mais comum aqui."
     ),
     "atualidades": (
         "O material e um resumo de noticias. Cada noticia distinta vira um "
@@ -116,9 +114,9 @@ MODEL_INSTRUCTIONS = {
         "pontos principais DA MESMA noticia em frases curtas (cada frase "
         "um paragrafo, vira um bullet) -- agrupe todos os pontos de uma "
         "mesma noticia num so item, ate aproximar de {budget} caracteres "
-        "no campo 'resumo'. NUNCA crie um item por frase isolada; um item "
-        "e uma noticia inteira. Os indices de imagem apontam pras fotos "
-        "relacionadas aquela noticia especifica (ou null)."
+        "no campo 'resumo'. NUNCA crie um item por frase isolada nem junte "
+        "noticias diferentes no mesmo item; um item e sempre uma noticia "
+        "inteira e so uma."
     ),
 }
 
@@ -154,22 +152,14 @@ def _batch_paragraphs(paragraphs: list[str], max_chars: int = MAX_BATCH_CHARS) -
     return batches
 
 
-def _structure_batch(model_key: str, paragraphs: list[str], images: list, char_budget: int | None = None) -> list[dict]:
+def _structure_batch(model_key: str, paragraphs: list[str], char_budget: int | None = None) -> list[dict]:
     client = _get_client()
     schema_cfg = SCHEMAS[model_key]
 
     raw_text = "\n\n".join(paragraphs)
-    image_hint = ""
-    if images:
-        listing = "\n".join(f"[{i}] {p.name}" for i, p in enumerate(images))
-        image_hint = (
-            f"\n\nImagens disponiveis (use o indice no campo correspondente, "
-            f"de 0 a {len(images) - 1}; nunca invente um indice fora desse intervalo):\n{listing}"
-        )
-
     instructions = MODEL_INSTRUCTIONS[model_key].format(budget=char_budget or 900)
 
-    user_prompt = f"{instructions}\n\nMaterial bruto do professor:\n\n{raw_text}{image_hint}"
+    user_prompt = f"{instructions}\n\nMaterial bruto do professor:\n\n{raw_text}"
 
     response = client.chat.completions.create(
         model=OPENAI_MODEL,
@@ -195,32 +185,17 @@ def _structure_batch(model_key: str, paragraphs: list[str], images: list, char_b
         )
 
     data = json.loads(choice.message.content)
-
-    resolved_items = []
-    for item in data["items"]:
-        resolved = {}
-        for key, value in item.items():
-            if key.endswith("_indice"):
-                role = key[: -len("_indice")]
-                resolved[role] = images[value] if value is not None and 0 <= value < len(images) else None
-            else:
-                resolved[key] = value
-        resolved_items.append(resolved)
-
-    return resolved_items
+    return data["items"]
 
 
 def structure_content(
     model_key: str,
     paragraphs: list[str],
-    images: list,
     char_budget: int | None = None,
     on_progress=None,
 ) -> list[dict]:
-    """images: lista de Path das imagens extraidas do material bruto (na ordem
-    em que apareceram). Retorna lista de dicts com as chaves ja resolvidas
-    pros nomes de campo esperados por config.TEMPLATES[model_key]['fields'/'image_roles']
-    (ex: 'imagem_indice' vira 'imagem': Path).
+    """Retorna lista de dicts com as chaves esperadas por
+    config.TEMPLATES[model_key]['fields'].
 
     Material grande e dividido em varios lotes (cada um uma chamada separada a
     OpenAI) pra nunca estourar o limite de tokens de saida de uma unica
@@ -236,5 +211,5 @@ def structure_content(
     for i, batch in enumerate(batches, start=1):
         if on_progress:
             on_progress(i, len(batches))
-        all_items.extend(_structure_batch(model_key, batch, images, char_budget))
+        all_items.extend(_structure_batch(model_key, batch, char_budget))
     return all_items

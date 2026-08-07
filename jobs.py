@@ -45,9 +45,8 @@ def process_job(job_id: str, upload_path: Path):
     model_key = job["model_key"]
 
     try:
-        job["status"] = "extraindo texto e imagens"
-        images_dir = UPLOAD_DIR / job_id / "images"
-        paragraphs, images = doc_parser.extract(upload_path, images_dir)
+        job["status"] = "extraindo texto"
+        paragraphs = doc_parser.extract(upload_path)
 
         char_budget = renderer.get_capacity_budget(model_key)
 
@@ -56,7 +55,7 @@ def process_job(job_id: str, upload_path: Path):
 
         job["status"] = "estruturando conteudo (IA)"
         items = llm.structure_content(
-            model_key, paragraphs, images, char_budget=char_budget, on_progress=report_progress
+            model_key, paragraphs, char_budget=char_budget, on_progress=report_progress
         )
 
         job["status"] = "gerando pptx"

@@ -19,7 +19,6 @@ TEMPLATES = {
         "roles": {"corpo": "Rectangle 3", "imagem": "Picture 2"},
         "text_role_for_capacity": "corpo",
         "fields": ["corpo"],  # campos de texto que o LLM deve preencher por item
-        "has_image": True,
         "image_roles": ["imagem"],
     },
     "bb": {
@@ -30,7 +29,6 @@ TEMPLATES = {
         "roles": {"corpo": "Retângulo 1"},
         "text_role_for_capacity": "corpo",
         "fields": ["corpo"],
-        "has_image": False,
         "image_roles": [],
     },
     "atualidades": {
