@@ -15,18 +15,18 @@ TEMPLATES = {
         "label": "Apresentação padrão",
         "file": BASE_DIR / "pptx_templates" / "PETR_modelo.pptx",
         "keeper_indices": [0, 1],  # capa + abertura, preservados como estao
-        "content_template_index": 2,  # slide 'texto + imagem', fonte do clone (apos poda em scripts/prune_templates.py)
-        "roles": {"corpo": "Rectangle 3", "imagem": "Picture 2"},
+        "content_template_index": 2,  # slide 'titulo curto + definicao' (Aula 01 - Windows 10) (apos poda)
+        "roles": {"titulo": "Google Shape;135;p8", "corpo": "Google Shape;134;p8"},
         "text_role_for_capacity": "corpo",
-        "fields": ["corpo"],  # campos de texto que o LLM deve preencher por item
-        "image_roles": ["imagem"],
+        "fields": ["titulo", "corpo"],  # campos de texto que o LLM deve preencher por item
+        "image_roles": [],
     },
     "bb": {
         "label": "Mestre em Questões",
         "file": BASE_DIR / "pptx_templates" / "BB_modelo.pptx",
         "keeper_indices": [0, 1],
-        "content_template_index": 2,  # slide 'questao/comentario', 1 bloco de texto, sem imagem (apos poda)
-        "roles": {"corpo": "Retângulo 1"},
+        "content_template_index": 2,  # slide 'questao/comentario', 1 bloco de texto (PETROBRAS MQ Bloco 3) (apos poda)
+        "roles": {"corpo": "Retangulo 1"},  # sem acento neste arquivo
         "text_role_for_capacity": "corpo",
         "fields": ["corpo"],
         "image_roles": [],
@@ -35,17 +35,16 @@ TEMPLATES = {
         "label": "Atualidades",
         "file": BASE_DIR / "pptx_templates" / "Atualidades_modelo.pptx",
         "keeper_indices": [0, 1],
-        "content_template_index": 2,  # slide 'noticia padrao' (manchete+resumo+2 imagens, sem categoria) (apos poda)
+        "content_template_index": 2,  # slide 'noticia com categoria' (Atualidades Maio 2026) (ja era indice 2 antes da poda)
         "roles": {
+            "categoria": "Retângulo: Cantos Arredondados 2",
             "manchete": "Retângulo 4",
             "resumo": "Retângulo 5",
-            "imagem_1": "Imagem 1",
-            "imagem_2": "Picture 2",
+            "imagem": "Picture 12",
         },
         "text_role_for_capacity": "resumo",
-        "fields": ["manchete", "resumo"],
-        "has_image": True,
-        "image_roles": ["imagem_1", "imagem_2"],
+        "fields": ["categoria", "manchete", "resumo"],
+        "image_roles": ["imagem"],
     },
 }
 

@@ -52,8 +52,11 @@ SCHEMAS = {
                     "type": "array",
                     "items": {
                         "type": "object",
-                        "properties": {"corpo": {"type": "string"}},
-                        "required": ["corpo"],
+                        "properties": {
+                            "titulo": {"type": "string"},
+                            "corpo": {"type": "string"},
+                        },
+                        "required": ["titulo", "corpo"],
                         "additionalProperties": False,
                     },
                 },
@@ -72,10 +75,11 @@ SCHEMAS = {
                     "items": {
                         "type": "object",
                         "properties": {
+                            "categoria": {"type": "string"},
                             "manchete": {"type": "string"},
                             "resumo": {"type": "string"},
                         },
-                        "required": ["manchete", "resumo"],
+                        "required": ["categoria", "manchete", "resumo"],
                         "additionalProperties": False,
                     },
                 },
@@ -101,22 +105,26 @@ MODEL_INSTRUCTIONS = {
         "isso se ja estiver assim, nao adicione se nao estiver."
     ),
     "petr": (
-        "O material e uma aula expositiva. Agrupe paragrafos relacionados "
-        "num MESMO item ate aproximar de {budget} caracteres no campo "
-        "'corpo' -- so abra um item novo quando o assunto mudar claramente "
-        "ou esse tamanho for ultrapassado. NUNCA crie um item separado pra "
-        "cada frase ou paragrafo curto isolado -- isso gera excesso de "
-        "slides minusculos, o que e o erro mais comum aqui."
+        "O material e uma aula expositiva. Cada item tem 'titulo' (nome "
+        "curto do conceito/topico, ex: 'ROM (Read-Only Memory)') e 'corpo' "
+        "(a explicacao/definicao daquele conceito). Agrupe paragrafos "
+        "relacionados ao MESMO conceito num so item, no campo 'corpo', ate "
+        "aproximar de {budget} caracteres -- so abra um item novo quando o "
+        "assunto/conceito mudar claramente ou esse tamanho for ultrapassado. "
+        "NUNCA crie um item separado pra cada frase ou paragrafo curto "
+        "isolado -- isso gera excesso de slides minusculos, o que e o erro "
+        "mais comum aqui."
     ),
     "atualidades": (
         "O material e um resumo de noticias. Cada noticia distinta vira um "
-        "item: 'manchete' e o titulo curto em caixa alta, 'resumo' sao os "
-        "pontos principais DA MESMA noticia em frases curtas (cada frase "
-        "um paragrafo, vira um bullet) -- agrupe todos os pontos de uma "
-        "mesma noticia num so item, ate aproximar de {budget} caracteres "
-        "no campo 'resumo'. NUNCA crie um item por frase isolada nem junte "
-        "noticias diferentes no mesmo item; um item e sempre uma noticia "
-        "inteira e so uma."
+        "item: 'categoria' e um rotulo curto em caixa alta pra area da "
+        "noticia (ex: 'BRASIL', 'ECONOMIA', 'MUNDO'), 'manchete' e o titulo "
+        "curto em caixa alta, 'resumo' sao os pontos principais DA MESMA "
+        "noticia em frases curtas (cada frase um paragrafo, vira um bullet) "
+        "-- agrupe todos os pontos de uma mesma noticia num so item, ate "
+        "aproximar de {budget} caracteres no campo 'resumo'. NUNCA crie um "
+        "item por frase isolada nem junte noticias diferentes no mesmo "
+        "item; um item e sempre uma noticia inteira e so uma."
     ),
 }
 

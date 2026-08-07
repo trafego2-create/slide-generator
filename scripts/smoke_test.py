@@ -20,8 +20,8 @@ LONG_TEXT = "\n".join([
 
 SCENARIOS = {
     "petr": [
-        {"corpo": LONG_TEXT},
-        {"corpo": "Um segundo item, mais curto, so pra confirmar que nao sofre split desnecessario."},
+        {"titulo": "Gestao de Continuidade de Negocios (GCN)", "corpo": LONG_TEXT},
+        {"titulo": "Item curto", "corpo": "Um segundo item, mais curto, so pra confirmar que nao sofre split desnecessario."},
     ],
     "bb": [
         {"corpo": "Enunciado: qual das alternativas abaixo esta correta? A) primeira B) segunda C) terceira"},
@@ -29,6 +29,7 @@ SCENARIOS = {
     ],
     "atualidades": [
         {
+            "categoria": "ECONOMIA",
             "manchete": "GOVERNO ANUNCIA NOVA MEDIDA ECONOMICA",
             "resumo": LONG_TEXT,
         },
