@@ -15,8 +15,8 @@ TEMPLATES = {
         "label": "Apresentação padrão",
         "file": BASE_DIR / "pptx_templates" / "PETR_modelo.pptx",
         "keeper_indices": [0, 1],  # capa + abertura, preservados como estao
-        "content_template_index": 2,  # slide 'titulo curto + definicao' (Aula 01 - Windows 10) (apos poda)
-        "roles": {"titulo": "Google Shape;135;p8", "corpo": "Google Shape;134;p8"},
+        "content_template_index": 2,  # slide 53 'titulo + corpo', altura de caixa mediana entre 17 slides do mesmo tipo (Aula 01) (apos poda)
+        "roles": {"titulo": "Google Shape;460;p49", "corpo": "Google Shape;461;p49"},
         "text_role_for_capacity": "corpo",
         "fields": ["titulo", "corpo"],  # campos de texto que o LLM deve preencher por item
         "image_roles": [],
