@@ -1,10 +1,16 @@
 """Mede quanto texto cabe numa caixa (shape) e divide texto longo em blocos que
 respeitam o padrao visual. Importante: a simulacao de quebra de linha aqui e
-usada SO pra estimar quantas linhas visuais um paragrafo vai ocupar (decidir
-quando abrir um novo slide) -- os paragrafos originais nunca sao fragmentados
-em varios paragrafos de saida, porque isso quebraria listas com marcador
-(cada linha quebrada viraria um bullet solto). A quebra de linha em si fica
-por conta do proprio PowerPoint ao renderizar."""
+usada SO pra estimar quantas linhas visuais um texto vai ocupar (decidir
+quando abrir um novo slide) -- a quebra de linha em si fica por conta do
+proprio PowerPoint ao renderizar.
+
+Prioridade de corte, da mais preferida pra menos preferida:
+1. Entre paragrafos (nunca quebra um paragrafo/bullet que cabe inteiro).
+2. Quando um paragrafo sozinho e maior que a capacidade de um slide: entre
+   frases (usa pontuacao de fim de frase), nunca no meio de uma frase.
+3. So quando uma UNICA frase sozinha ja e maior que a capacidade inteira: por
+   palavra (ultimo recurso, deveria ser raro em material real)."""
+import re
 from pathlib import Path
 
 from PIL import ImageFont
@@ -12,6 +18,8 @@ from PIL import ImageFont
 EMU_PER_INCH = 914400
 DEFAULT_DPI = 96
 LINE_SPACING = 1.2
+
+_SENTENCE_END_RE = re.compile(r"(?<=[.!?])\s+")
 
 # No Windows (dev local) usamos as fontes reais. No container Linux (deploy) elas
 # nao existem -- Arial/Verdana sao proprietarias da Microsoft e nao vem no Linux
@@ -70,6 +78,51 @@ def _count_wrapped_lines(text, font, max_width_px):
     return len(_wrap_paragraph(text, font, max_width_px))
 
 
+def _split_into_sentences(text):
+    parts = _SENTENCE_END_RE.split(text.strip())
+    return [p for p in parts if p]
+
+
+def _hard_wrap_by_words(text, font, box_width_px, max_lines):
+    """Ultimo recurso: quebra por palavra. So usado quando uma UNICA frase
+    sozinha ja e maior que a capacidade inteira de um slide."""
+    wrapped = _wrap_paragraph(text, font, box_width_px)
+    return [" ".join(wrapped[i:i + max_lines]) for i in range(0, len(wrapped), max_lines)]
+
+
+def _split_oversized_paragraph(paragraph, font, box_width_px, max_lines):
+    """Quebra um paragrafo maior que a capacidade de um slide, priorizando
+    cortar entre frases -- nunca no meio de uma frase, exceto se uma frase
+    sozinha ja for maior que a capacidade inteira (caso raro)."""
+    sentences = _split_into_sentences(paragraph)
+    if len(sentences) <= 1:
+        return _hard_wrap_by_words(paragraph, font, box_width_px, max_lines)
+
+    blocks = []
+    current = []
+    current_lines = 0
+    for sentence in sentences:
+        sentence_lines = _count_wrapped_lines(sentence, font, box_width_px)
+
+        if current_lines + sentence_lines <= max_lines:
+            current.append(sentence)
+            current_lines += sentence_lines
+        elif not current:
+            blocks.extend(_hard_wrap_by_words(sentence, font, box_width_px, max_lines))
+            current, current_lines = [], 0
+        else:
+            blocks.append(" ".join(current))
+            if sentence_lines <= max_lines:
+                current, current_lines = [sentence], sentence_lines
+            else:
+                blocks.extend(_hard_wrap_by_words(sentence, font, box_width_px, max_lines))
+                current, current_lines = [], 0
+
+    if current:
+        blocks.append(" ".join(current))
+    return blocks
+
+
 def estimate_char_budget(font_name, font_size_pt, box_width_emu, box_height_emu, dpi=DEFAULT_DPI):
     """Estimativa grosseira de quantos caracteres cabem numa caixa. NAO e o
     mecanismo que garante o encaixe de verdade (isso e split_text_to_slides,
@@ -95,9 +148,9 @@ def max_lines_for_box(font_name, font_size_pt, box_height_emu, dpi=DEFAULT_DPI):
 def split_text_to_slides(paragraphs, font_name, font_size_pt, box_width_emu, box_height_emu, dpi=DEFAULT_DPI):
     """paragraphs: lista de strings (cada uma um paragrafo/bullet do material bruto).
     Retorna lista de blocos de texto (um bloco = o que cabe em uma instancia do
-    modelo). Cada bloco preserva os paragrafos originais intactos (join por "\\n"),
-    nunca quebra uma frase/bullet ao meio -- exceto no caso raro de um unico
-    paragrafo sozinho ja ser maior que a capacidade de um slide inteiro."""
+    modelo). Prioriza cortar entre paragrafos; quando um paragrafo sozinho nao
+    cabe, corta entre frases -- nunca no meio de uma frase (ver
+    _split_oversized_paragraph)."""
     font_px = round(font_size_pt * dpi / 72)
     font = ImageFont.truetype(_font_path(font_name), font_px)
     box_width_px = box_width_emu / EMU_PER_INCH * dpi
@@ -114,24 +167,18 @@ def split_text_to_slides(paragraphs, font_name, font_size_pt, box_width_emu, box
             current_paragraphs.append(para)
             current_line_count += para_line_count
         elif not current_paragraphs:
-            # bloco vazio, mas o paragrafo sozinho e maior que a capacidade de um slide:
-            # caso raro, precisa quebrar o proprio paragrafo em pedacos de texto corrido
-            wrapped = _wrap_paragraph(para, font, box_width_px)
-            for i in range(0, len(wrapped), max_lines):
-                blocks.append([" ".join(wrapped[i:i + max_lines])])
-            current_paragraphs = []
-            current_line_count = 0
+            for sub_block in _split_oversized_paragraph(para, font, box_width_px, max_lines):
+                blocks.append([sub_block])
+            current_paragraphs, current_line_count = [], 0
         else:
             blocks.append(current_paragraphs)
             if para_line_count <= max_lines:
                 current_paragraphs = [para]
                 current_line_count = para_line_count
             else:
-                wrapped = _wrap_paragraph(para, font, box_width_px)
-                for i in range(0, len(wrapped), max_lines):
-                    blocks.append([" ".join(wrapped[i:i + max_lines])])
-                current_paragraphs = []
-                current_line_count = 0
+                for sub_block in _split_oversized_paragraph(para, font, box_width_px, max_lines):
+                    blocks.append([sub_block])
+                current_paragraphs, current_line_count = [], 0
 
     if current_paragraphs:
         blocks.append(current_paragraphs)
