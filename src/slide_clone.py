@@ -1,7 +1,26 @@
 """Clona slides existentes (o 'modelo real') e troca texto/imagem preservando 100% da formatacao original."""
 import copy
+import re
 from pptx.oxml.ns import qn
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
+
+_BOLD_MARKER_RE = re.compile(r"\*\*(.+?)\*\*")
+
+
+def _parse_bold_segments(line):
+    """Converte uma linha com marcadores **negrito** (ver parser.py) numa
+    lista de (texto, bold). Sem marcador, retorna a linha inteira como um
+    unico segmento nao-negrito."""
+    segments = []
+    pos = 0
+    for m in _BOLD_MARKER_RE.finditer(line):
+        if m.start() > pos:
+            segments.append((line[pos:m.start()], False))
+        segments.append((m.group(1), True))
+        pos = m.end()
+    if pos < len(line):
+        segments.append((line[pos:], False))
+    return segments or [(line, False)]
 
 
 def duplicate_slide(prs, slide_index):
@@ -45,7 +64,9 @@ def set_text_preserving_format(shape, text_block):
     """Substitui o texto do shape mantendo fonte/tamanho/negrito/cor do primeiro run
     original E as propriedades do paragrafo (bullet, indentacao, espacamento) em
     TODAS as linhas geradas -- sem isso, so a primeira linha ficaria com o marcador
-    de lista e as demais sairiam sem bullet/indent."""
+    de lista e as demais sairiam sem bullet/indent. Trechos marcados com
+    **negrito** (ver parser.py) viram runs em negrito dentro da mesma linha,
+    sem alterar fonte/tamanho/cor herdados do modelo."""
     tf = shape.text_frame
     first_para = tf.paragraphs[0]
     template_run = first_para.runs[0] if first_para.runs else None
@@ -73,16 +94,18 @@ def set_text_preserving_format(shape, text_block):
             if existing_pPr is not None:
                 p._p.remove(existing_pPr)
             p._p.insert(0, copy.deepcopy(template_pPr))
-        run = p.add_run()
-        run.text = line
-        if font_name:
-            run.font.name = font_name
-        if font_size:
-            run.font.size = font_size
-        if font_bold is not None:
-            run.font.bold = font_bold
-        if font_color_rgb:
-            run.font.color.rgb = font_color_rgb
+        for text, is_bold in _parse_bold_segments(line):
+            if not text:
+                continue
+            run = p.add_run()
+            run.text = text
+            if font_name:
+                run.font.name = font_name
+            if font_size:
+                run.font.size = font_size
+            run.font.bold = True if is_bold else font_bold
+            if font_color_rgb:
+                run.font.color.rgb = font_color_rgb
 
 
 def replace_picture(shape, new_image_path):

@@ -133,7 +133,13 @@ estrutura de um modelo de slide. Regra mais importante, sem excecao: NUNCA \
 reescreva, parafraseie, resuma ou corrija o conteudo do professor -- copie o \
 texto original literalmente, so decidindo onde cortar e em qual campo/item \
 colocar cada trecho. Se o material bruto nao tiver conteudo suficiente pra \
-preencher um campo, deixe vazio ao inves de inventar."""
+preencher um campo, deixe vazio ao inves de inventar.
+
+O material bruto pode conter trechos marcados assim: **palavra** -- isso \
+indica que aquele trecho estava em NEGRITO no documento original. Preserve \
+esses marcadores EXATAMENTE como estao ao copiar o texto pros campos: nunca \
+adicione marcadores **novos** que nao existiam no original, nunca remova os \
+que ja existem, e nunca mova um marcador pra um trecho diferente do texto."""
 
 
 # Tamanho maximo (em caracteres) de material bruto por chamada a OpenAI. Um
