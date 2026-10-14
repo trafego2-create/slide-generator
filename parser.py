@@ -10,6 +10,8 @@ from pathlib import Path
 
 import docx
 import fitz  # pymupdf
+from docx.table import Table
+from docx.text.hyperlink import Hyperlink
 
 
 def _merge_bold_segments(runs_or_spans):
@@ -26,18 +28,60 @@ def _merge_bold_segments(runs_or_spans):
     return segments
 
 
+class TableRow(str):
+    """Paragrafo que veio de uma linha de tabela. Continua sendo uma str
+    normal; o llm.py usa o tipo pra nunca comecar um slide no meio de uma
+    tabela (sem isso a IA tratava cada linha como um item separado)."""
+
+
 def _mark_bold(segments) -> str:
     return "".join(f"**{text}**" if bold else text for text, bold in segments)
+
+
+def _docx_paragraph_text(p) -> str:
+    """Texto do paragrafo incluindo trechos dentro de hyperlink (p.runs sozinho
+    ignora esses trechos e o texto saia com buraco)."""
+    runs = []
+    for content in p.iter_inner_content():
+        if isinstance(content, Hyperlink):
+            runs.extend(content.runs)
+        else:
+            runs.append(content)
+    return _mark_bold(_merge_bold_segments([(r.text, bool(r.bold)) for r in runs])).strip()
+
+
+def _docx_table_rows(table) -> list[str]:
+    """Cada linha da tabela vira um paragrafo com as celulas separadas por ' | '.
+    O modelo de slide nao tem tabela, entao o conteudo entra como texto (antes
+    tabelas eram ignoradas e sumiam do resultado, ex: tabela de atalhos)."""
+    rows = []
+    for row in table.rows:
+        cells = []
+        seen = set()
+        for cell in row.cells:
+            # celula mesclada aparece repetida em row.cells
+            if id(cell._tc) in seen:
+                continue
+            seen.add(id(cell._tc))
+            text = " ".join(t for t in (_docx_paragraph_text(p) for p in cell.paragraphs) if t)
+            if text:
+                cells.append(text)
+        if cells:
+            rows.append(TableRow(" | ".join(cells)))
+    return rows
 
 
 def extract_docx(path: Path) -> list[str]:
     document = docx.Document(str(path))
     paragraphs = []
-    for p in document.paragraphs:
-        segments = _merge_bold_segments([(r.text, bool(r.bold)) for r in p.runs])
-        text = _mark_bold(segments).strip()
-        if text:
-            paragraphs.append(text)
+    # paragrafos e tabelas na ordem em que aparecem no documento
+    for block in document.iter_inner_content():
+        if isinstance(block, Table):
+            paragraphs.extend(_docx_table_rows(block))
+        else:
+            text = _docx_paragraph_text(block)
+            if text:
+                paragraphs.append(text)
     return paragraphs
 
 

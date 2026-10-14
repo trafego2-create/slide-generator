@@ -17,6 +17,7 @@ TEMPLATES = {
         "keeper_indices": [0, 1],  # capa + abertura, preservados como estao
         "content_template_index": 2,  # slide 53 'titulo + corpo', altura de caixa mediana entre 17 slides do mesmo tipo (Aula 01) (apos poda)
         "roles": {"titulo": "Google Shape;460;p49", "corpo": "Google Shape;461;p49"},
+        "title_field": "titulo",
         "text_role_for_capacity": "corpo",
         "fields": ["titulo", "corpo"],  # campos de texto que o LLM deve preencher por item
         "image_roles": [],
@@ -27,6 +28,7 @@ TEMPLATES = {
         "keeper_indices": [0, 1],
         "content_template_index": 2,  # slide 'questao/comentario', 1 bloco de texto (PETROBRAS MQ Bloco 3) (apos poda)
         "roles": {"corpo": "Retangulo 1"},  # sem acento neste arquivo
+        "title_field": None,
         "text_role_for_capacity": "corpo",
         "fields": ["corpo"],
         "image_roles": [],
@@ -42,6 +44,7 @@ TEMPLATES = {
             "resumo": "Retângulo 5",
             "imagem": "Picture 12",
         },
+        "title_field": "manchete",
         "text_role_for_capacity": "resumo",
         "fields": ["categoria", "manchete", "resumo"],
         "image_roles": ["imagem"],

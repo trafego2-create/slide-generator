@@ -123,21 +123,6 @@ def _split_oversized_paragraph(paragraph, font, box_width_px, max_lines):
     return blocks
 
 
-def estimate_char_budget(font_name, font_size_pt, box_width_emu, box_height_emu, dpi=DEFAULT_DPI):
-    """Estimativa grosseira de quantos caracteres cabem numa caixa. NAO e o
-    mecanismo que garante o encaixe de verdade (isso e split_text_to_slides,
-    chamado na hora de renderizar) -- serve so de orientacao pro LLM sobre o
-    tamanho aproximado de um item, pra evitar itens minusculos (um por frase)
-    ou gigantes demais."""
-    font_px = round(font_size_pt * dpi / 72)
-    font = ImageFont.truetype(_font_path(font_name), font_px)
-    box_width_px = box_width_emu / EMU_PER_INCH * dpi
-    avg_char_width_px = font.getlength("abcdefghijklmnopqrstuvwxyz ") / 27
-    chars_per_line = max(1, int(box_width_px / avg_char_width_px))
-    lines = max_lines_for_box(font_name, font_size_pt, box_height_emu, dpi)
-    return chars_per_line * lines
-
-
 def max_lines_for_box(font_name, font_size_pt, box_height_emu, dpi=DEFAULT_DPI):
     font_px = round(font_size_pt * dpi / 72)
     line_height_px = font_px * LINE_SPACING

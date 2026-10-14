@@ -24,6 +24,7 @@ def create_job(filename: str, model_key: str) -> str:
         "status": "pendente",
         "erro": None,
         "output_path": None,
+        "faltando": [],
     }
     return job_id
 
@@ -48,18 +49,18 @@ def process_job(job_id: str, upload_path: Path):
         job["status"] = "extraindo texto"
         paragraphs = doc_parser.extract(upload_path)
 
-        char_budget = renderer.get_capacity_budget(model_key)
-
         def report_progress(batch_num, total_batches):
             job["status"] = f"estruturando conteudo (IA) -- lote {batch_num} de {total_batches}"
 
         job["status"] = "estruturando conteudo (IA)"
-        items = llm.structure_content(
-            model_key, paragraphs, char_budget=char_budget, on_progress=report_progress
-        )
+        items = llm.structure_content(model_key, paragraphs, on_progress=report_progress)
 
         job["status"] = "gerando pptx"
         out_path = renderer.build_presentation(model_key, items, job_id=job_id)
+
+        # conferencia final: todo paragrafo do material tem que estar no pptx
+        # gerado -- se algum faltar, entrega mesmo assim mas avisa na tela
+        job["faltando"] = renderer.find_missing_paragraphs(model_key, paragraphs, out_path)
 
         job["output_path"] = out_path
         job["status"] = "concluido"

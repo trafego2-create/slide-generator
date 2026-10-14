@@ -8,6 +8,16 @@
 >
   {% if job.status == 'concluido' %}
     <p class="status ok">Pronto.</p>
+    {% if job.faltando %}
+      <div class="status erro">
+        <p>Atenção: {{ job.faltando|length }} trecho(s) do material não entraram nos slides. Confira antes de usar:</p>
+        <ul>
+          {% for trecho in job.faltando[:10] %}
+            <li>{{ trecho.replace('**', '')|truncate(120) }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
     <a class="button" href="/jobs/{{ job.id }}/download">Baixar apresentação</a>
   {% elif job.status == 'erro' %}
     <p class="status erro">Erro: {{ job.erro }}</p>
