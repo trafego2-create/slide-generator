@@ -38,6 +38,14 @@ _CANDIDATES = {
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     ],
+    # Arial Nova (Apresentacao padrao) e fonte de nuvem do Office, nao vem
+    # instalada -- as metricas sao proximas do Arial, entao estima com ele
+    "Arial Nova": [
+        r"C:\Windows\Fonts\ArialNova.ttf",
+        r"C:\Windows\Fonts\arial.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ],
     "Calibri": [
         r"C:\Windows\Fonts\calibri.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",

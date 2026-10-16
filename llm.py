@@ -6,10 +6,12 @@ dos paragrafos originais -- por construcao, nenhum paragrafo some e nenhum e
 reescrito (antes a IA copiava o texto e as vezes pulava topicos inteiros ou
 trocava palavras, ex: 'Normal' virando 'Modo Normal')."""
 import json
+import re
+import unicodedata
 
 from openai import OpenAI
 
-from config import OPENAI_API_KEY, OPENAI_MODEL, TEMPLATES
+from config import OPENAI_API_KEY, OPENAI_MODEL, TEMPLATES, ATUALIDADES_CATEGORIAS, ATUALIDADES_REGIOES
 from parser import TableRow
 
 _client = None
@@ -60,7 +62,12 @@ SCHEMAS = {
     },
     "atualidades": {
         "name": "noticias",
-        "schema": _schema({"inicio": _INICIO, "tem_titulo": _TEM_TITULO, "categoria": {"type": "string"}}),
+        "schema": _schema({
+            "inicio": _INICIO,
+            "tem_titulo": _TEM_TITULO,
+            "categoria": {"type": "string", "enum": ATUALIDADES_CATEGORIAS},
+            "regiao": {"type": "string", "enum": [""] + ATUALIDADES_REGIOES},
+        }),
     },
 }
 
@@ -83,11 +90,20 @@ MODEL_INSTRUCTIONS = {
         "false (o sistema ja divide texto longo em varios slides sozinho)."
     ),
     "atualidades": (
-        "O material e um resumo de noticias. Cada item e uma noticia inteira: "
-        "comece um item novo em cada manchete, com tem_titulo = true quando o "
-        "paragrafo 'inicio' e a manchete. Nunca junte noticias diferentes no "
-        "mesmo item. 'categoria' e um rotulo curto em caixa alta pra area da "
-        "noticia (ex: 'BRASIL', 'ECONOMIA', 'MUNDO')."
+        "O material e um resumo de noticias. Cada item e uma noticia inteira. "
+        "Normalmente o proprio material traz a categoria escrita numa linha "
+        "antes da manchete (ex: 'BRASIL', 'GEOPOLÍTICA | Europa') -- nesse caso "
+        "o item comeca nessa linha. Sem linha de categoria, o item comeca na "
+        "manchete, com tem_titulo = true. Nunca junte noticias diferentes no "
+        "mesmo item. So quando o material NAO trouxer a categoria escrita, "
+        "escolha 'categoria' entre: BRASIL (o fato acontece no "
+        "Brasil, mesmo que envolva empresa ou pais estrangeiro), GEOPOLÍTICA "
+        "(fato de outro pais: governo, politica, lideres e figuras publicas, "
+        "conflitos, relacoes entre paises), GLOBALIZAÇÃO (temas que atravessam "
+        "fronteiras: economia/comercio global, crimes e redes internacionais, "
+        "sociedade em escala global) ou DIVERSOS (o resto: ciencia, cultura, "
+        "rankings, curiosidades). 'regiao' so pra GEOPOLÍTICA: o continente ou "
+        "regiao principal da noticia; nas outras categorias, deixe vazio."
     ),
 }
 
@@ -104,6 +120,31 @@ Liste os itens em ordem crescente de 'inicio', comecando pelo paragrafo [0]."""
 # resposta agora e minuscula (so numeros), entao o limite e pela qualidade da
 # leitura, nao mais pelo limite de tokens de saida.
 MAX_BATCH_CHARS = 6000
+
+def _strip_accents(text: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
+
+
+_CATEGORY_KEYS = {_strip_accents(c): c for c in ATUALIDADES_CATEGORIAS}
+_CATEGORY_RE = re.compile(r"^(" + "|".join(_CATEGORY_KEYS) + r")\b\s*(?:[|–—:/-]\s*(.*))?$", re.IGNORECASE)
+MAX_CATEGORY_LINE_CHARS = 60
+
+
+def category_line(text: str) -> tuple[str, str] | None:
+    """Se o paragrafo e a linha de categoria escrita no material (ex:
+    'BRASIL', '• Geopolítica - Europa'), devolve (categoria, texto da
+    etiqueta no formato do modelo, ex: 'GEOPOLÍTICA  |  Europa')."""
+    clean = re.sub(r"^[^\w]+", "", text.replace("**", "")).strip()
+    if not clean or len(clean) > MAX_CATEGORY_LINE_CHARS:
+        return None
+    match = _CATEGORY_RE.match(_strip_accents(clean))
+    if not match:
+        return None
+    category = _CATEGORY_KEYS[match.group(1).upper()]
+    # regiao como escrita no original (com acento), so a categoria em caixa alta
+    region = clean[len(clean) - len(match.group(2)):].strip() if match.group(2) else ""
+    return category, f"{category}  |  {region}" if region else category
+
 
 # Um paragrafo marcado como titulo mais longo que isso, ou terminado em ponto
 # (frase, nao titulo), e tratado como corpo -- protege a caixa de titulo de
@@ -134,7 +175,7 @@ def _segment_batch(model_key: str, paragraphs: list[str]) -> list[dict]:
     user_prompt = f"{MODEL_INSTRUCTIONS[model_key]}\n\nMaterial bruto do professor:\n\n{numbered}"
 
     response = client.chat.completions.create(
-        model=OPENAI_MODEL,
+        model=TEMPLATES[model_key].get("openai_model", OPENAI_MODEL),
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -157,6 +198,13 @@ def _segment_batch(model_key: str, paragraphs: list[str]) -> list[dict]:
         # tabela fica inteira no item do topico dela -- nunca abre item numa linha de tabela
         if 0 <= idx < len(paragraphs) and idx not in starts and not isinstance(paragraphs[idx], TableRow):
             starts[idx] = item
+    if TEMPLATES[model_key].get("category_slides"):
+        # categoria escrita no material: toda linha de categoria abre uma
+        # noticia, e a manchete logo abaixo dela nunca abre item separado
+        for idx, text in enumerate(paragraphs):
+            if category_line(text):
+                starts.setdefault(idx, {"inicio": idx, "tem_titulo": True})
+                starts.pop(idx + 1, None)
     if 0 not in starts:
         starts[0] = {"inicio": 0, "tem_titulo": False, "categoria": ""}
     return [starts[i] for i in sorted(starts)]
@@ -207,12 +255,30 @@ def structure_content(model_key: str, paragraphs: list[str], on_progress=None) -
     for start, end, meta in segment_content(model_key, paragraphs, on_progress):
         chunk = paragraphs[start:end]
         item = {field: meta.get(field, "") for field in cfg["fields"]}
-        if title_field and meta.get("tem_titulo") and _looks_like_title(chunk[0]):
+        written_category = cfg.get("category_slides") and chunk and category_line(chunk[0])
+        if written_category:
+            # categoria vem do proprio material; a manchete e a linha seguinte
+            item["categoria"] = written_category[1]
+            chunk = chunk[1:]
+            own_title = bool(chunk and _looks_like_title(chunk[0]))
+        else:
+            if meta.get("categoria") == "GEOPOLÍTICA" and meta.get("regiao"):
+                # palpite da IA (material sem categoria escrita), no formato da etiqueta
+                item["categoria"] = f"GEOPOLÍTICA  |  {meta['regiao']}"
+            own_title = bool(title_field and meta.get("tem_titulo") and chunk and _looks_like_title(chunk[0]))
+        if own_title:
             last_title = chunk[0]
             chunk = chunk[1:]
         if title_field:
             # item sem titulo proprio e continuacao do topico anterior
             item[title_field] = last_title
         item[body_field] = "\n".join(chunk)
+
+        # a IA as vezes separa o titulo do texto logo abaixo dele, gerando um
+        # slide so com titulo seguido de outro com o mesmo titulo herdado --
+        # junta os dois num slide so
+        if not own_title and items and title_field and not items[-1][body_field]:
+            items[-1][body_field] = item[body_field]
+            continue
         items.append(item)
     return items

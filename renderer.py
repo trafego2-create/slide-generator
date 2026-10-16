@@ -1,6 +1,7 @@
 """Monta o .pptx final: clona o slide-modelo do arquivo real uma vez por item,
 preenche texto/imagem pelos papeis definidos em config.TEMPLATES, e no final
 remove todo slide original que nao seja capa/abertura (keeper_indices)."""
+import re
 import sys
 import uuid
 from pathlib import Path
@@ -9,7 +10,7 @@ from pptx import Presentation
 from pptx.oxml.ns import qn
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
-from slide_clone import duplicate_slide, find_shape_by_name, set_text_preserving_format  # noqa: E402
+from slide_clone import duplicate_slide, find_shape_by_name, set_label_text, set_text_preserving_format  # noqa: E402
 from text_fit import split_text_to_slides  # noqa: E402
 
 from config import TEMPLATES, OUTPUT_DIR
@@ -69,6 +70,16 @@ def _remove_non_keeper_originals(prs, original_count, keeper_indices):
         prs.part.drop_rel(rid)
 
 
+def _source_slide_index(cfg, item):
+    """Slide-fonte a clonar pro item. Atualidades tem um por categoria
+    (etiqueta com cor propria); a categoria vem antes do '|' da regiao."""
+    category_slides = cfg.get("category_slides")
+    if not category_slides:
+        return cfg["content_template_index"]
+    category = (item.get("categoria") or "").split("|")[0].strip()
+    return category_slides.get(category, category_slides["DIVERSOS"])
+
+
 def build_presentation(model_key: str, items: list[dict], job_id: str | None = None) -> Path:
     """items: lista de dicts com os campos de texto (cfg['fields'])."""
     cfg = TEMPLATES[model_key]
@@ -79,11 +90,14 @@ def build_presentation(model_key: str, items: list[dict], job_id: str | None = N
     original_count = len(prs.slides._sldIdLst)
 
     for item in expanded_items:
-        new_slide = duplicate_slide(prs, cfg["content_template_index"])
+        new_slide = duplicate_slide(prs, _source_slide_index(cfg, item))
 
         for field in cfg["fields"]:
             shape = find_shape_by_name(new_slide, cfg["roles"][field])
-            set_text_preserving_format(shape, item.get(field, "") or "")
+            if field in cfg.get("label_roles", []):
+                set_label_text(shape, item.get(field, "") or "")
+            else:
+                set_text_preserving_format(shape, item.get(field, "") or "")
 
         # sem imagens por decisao de escopo atual -- remove o quadro de foto
         # em vez de deixar a foto de exemplo original do modelo aparecendo
@@ -100,7 +114,9 @@ def build_presentation(model_key: str, items: list[dict], job_id: str | None = N
 
 
 def _normalize(text: str) -> str:
-    return " ".join(text.replace("**", "").split())
+    # compara so as palavras: a etiqueta de categoria padroniza caixa e
+    # separador ('Geopolítica - Europa' vira 'GEOPOLÍTICA  |  Europa')
+    return " ".join(re.sub(r"[^\w]+", " ", text.replace("**", "")).lower().split())
 
 
 def find_missing_paragraphs(model_key: str, paragraphs: list[str], pptx_path: Path) -> list[str]:

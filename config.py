@@ -10,6 +10,11 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 
+# Categorias do layout V2 de Atualidades, na ordem dos slides-fonte no modelo.
+# Geopolitica leva a regiao junto na etiqueta (ex: "GEOPOLÍTICA  |  Europa").
+ATUALIDADES_CATEGORIAS = ["BRASIL", "GEOPOLÍTICA", "GLOBALIZAÇÃO", "DIVERSOS"]
+ATUALIDADES_REGIOES = ["América", "Europa", "Ásia", "África", "Oriente Médio", "Oceania"]
+
 TEMPLATES = {
     "petr": {
         "label": "Apresentação padrão",
@@ -37,17 +42,23 @@ TEMPLATES = {
         "label": "Atualidades",
         "file": BASE_DIR / "pptx_templates" / "Atualidades_modelo.pptx",
         "keeper_indices": [0, 1],
-        "content_template_index": 2,  # slide 'noticia com categoria' (Atualidades Maio 2026) (ja era indice 2 antes da poda)
+        # layout V2 (out/2026): um slide-fonte por categoria, cada um com a
+        # etiqueta na cor/bolinhas da categoria (ver scripts/build_atualidades_modelo.py)
+        "category_slides": {cat: 2 + i for i, cat in enumerate(ATUALIDADES_CATEGORIAS)},
+        "content_template_index": 2,  # slide-fonte BRASIL; usado pra medir a capacidade do resumo
         "roles": {
-            "categoria": "Retângulo: Cantos Arredondados 2",
+            "categoria": "Categoria",
             "manchete": "Retângulo 4",
             "resumo": "Retângulo 5",
-            "imagem": "Picture 12",
         },
+        "label_roles": ["categoria"],  # troca so o texto da etiqueta, mantendo as bolinhas
+        # segmentar noticias e mais sensivel que os outros modelos; gpt-4o-mini
+        # errava bem mais nos testes (decisao 16/10/2026)
+        "openai_model": "gpt-4o",
         "title_field": "manchete",
         "text_role_for_capacity": "resumo",
         "fields": ["categoria", "manchete", "resumo"],
-        "image_roles": ["imagem"],
+        "image_roles": [],
     },
 }
 
